@@ -13,6 +13,7 @@ from data.dataset import build_train_loader
 from models.unet3d import build_unet3d
 from utils.losses import build_loss_function
 from torch.optim import Adam
+from monai.inferers import SlidingWindowInferer
 
 # 忽略底层警告
 warnings.filterwarnings("ignore")
@@ -71,6 +72,7 @@ def main():
         batch_size=1, 
         mini_dataset_size=5 
     )
+
     
     val_loader, val_count = build_train_loader(
         data_dir=args.data_dir, 
@@ -147,13 +149,18 @@ def main():
         val_epoch_loss = 0
         val_step = 0
         
+        # 初始化滑动窗口推理器 (尺寸必须和训练时的 Crop size 保持一致)
+        val_inferer = SlidingWindowInferer(roi_size=(128, 128, 128), sw_batch_size=4, overlap=0.5)
+        
         with torch.no_grad():
             for val_data in val_loader:
                 val_step += 1
                 val_inputs = val_data["image"].to(device)
                 val_labels = val_data["label"].to(device)
                 
-                val_outputs = model(val_inputs)
+                # 核心修复：用滑动窗口替换原来的 val_outputs = model(val_inputs)
+                val_outputs = val_inferer(val_inputs, model)
+                
                 v_loss = loss_function(val_outputs, val_labels)
                 val_epoch_loss += v_loss.item()
                 
