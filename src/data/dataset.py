@@ -26,7 +26,7 @@ def build_train_loader(data_dir, json_path, split="train", batch_size=1, mini_da
         ds, 
         batch_size=batch_size, 
         shuffle=is_train, 
-        num_workers=8,        # <--- 加入这行，开启多进程预加载
+        num_workers=0,        # <--- 加入这行，开启多进程预加载
         pin_memory=True       # <--- 加入这行，加速内存到显存的传输
     )
     

@@ -4,6 +4,7 @@ import torch
 import warnings
 import json
 
+
 # 忽略 MONAI 的底层版本兼容性警告，保证控制台输出纯净
 warnings.filterwarnings("ignore")
 
@@ -17,7 +18,10 @@ from monai.transforms import (
     NormalizeIntensityd,
     RandCropByPosNegLabeld,
     EnsureTyped,
-    SpatialPadd
+    SpatialPadd,
+    RandFlipd,
+    RandAffined,
+    RandShiftIntensityd
 )
 from monai.data import Dataset, DataLoader
 
@@ -38,9 +42,11 @@ def get_brats_transforms(is_train=True):
     ]
     
     if is_train:
-  
         transforms.extend([
+            # 1. 安全垫：保证尺寸足够裁剪
             SpatialPadd(keys=keys, spatial_size=(128, 128, 128)),
+            
+            # 2. 核心裁剪：切出 4 个 128x128x128 的块
             RandCropByPosNegLabeld(
                 keys=keys,
                 label_key="label",
@@ -50,8 +56,32 @@ def get_brats_transforms(is_train=True):
                 num_samples=4,
                 image_key="image",
                 image_threshold=0,
-            )]
-        )
+            ),
+            
+            # ================= 新增：真正的空间与像素级数据增强 =================
+            # 3. 随机镜像翻转 (概率 50%，分别沿 X, Y, Z 轴)
+            RandFlipd(keys=keys, prob=0.5, spatial_axis=0),
+            RandFlipd(keys=keys, prob=0.5, spatial_axis=1),
+            RandFlipd(keys=keys, prob=0.5, spatial_axis=2),
+            
+            # 4. 随机仿射变换 (轻微的旋转、缩放、平移，模拟病人在机器里的轻微乱动)
+            RandAffined(
+                keys=keys,
+                mode=("bilinear", "nearest"),
+                prob=0.5,
+                spatial_size=(128, 128, 128),
+                rotate_range=(0.1, 0.1, 0.1), # 约 5.7 度的旋转
+                scale_range=(0.1, 0.1, 0.1)   # 10% 的缩放
+            ),
+            
+            # 5. 随机强度偏移 (模拟不同 MRI 仪器的亮度差异)
+            RandShiftIntensityd(
+                keys="image", # 注意：只对图像做，绝对不能改变 label 的值
+                offsets=0.1,
+                prob=0.5,
+            )
+            # ====================================================================
+        ])
 
     transforms.append(EnsureTyped(keys=keys))
     
