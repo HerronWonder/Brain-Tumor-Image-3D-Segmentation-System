@@ -19,8 +19,8 @@ warnings.filterwarnings("ignore")
 # ==========================================
 # 默认配置区
 # ==========================================
-DATA_DIRECTORY = "../../../DataSets/brats-2021-task/All/"
-JSON_PATH = "../../../DataSets/brats-2021-task/dataset.json"
+DATA_DIRECTORY = "../../../dataset/All/"
+JSON_PATH = "../../../dataset/dataset.json"
 
 def get_model(model_name, device):
     """根据参数实例化不同的模型架构"""

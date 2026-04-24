@@ -18,8 +18,8 @@ warnings.filterwarnings("ignore")
 # ==========================================
 # 常用超参数配置区
 # ==========================================
-DATA_DIRECTORY = "../../../DataSets/brats-2021-task/All/"
-JSON_PATH = "../../../DataSets/brats-2021-task/dataset.json"
+DATA_DIRECTORY = "../../../dataset/All/"
+JSON_PATH = "../../../dataset/dataset.json"
 EPOCH_NUM = 95
 LEARNING_RATE = 1e-4
 RESUME_WEIGHT = "weights/mamba_unet_last.pth" # 改为读取 last
