@@ -1,0 +1,18 @@
+server:
+  port: 8080
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2GB
+      max-request-size: 8GB
+
+inference:
+  base-url: ${INFERENCE_BASE_URL:http://127.0.0.1:8000}
+  infer-path: ${INFERENCE_INFER_PATH:/internal/infer}
+  timeout-seconds: ${INFERENCE_TIMEOUT_SECONDS:600}
+  internal-token: ${INFERENCE_INTERNAL_TOKEN:}
+
+storage:
+  upload-root: ${STORAGE_UPLOAD_ROOT:../backend/workspace/uploads}
+  output-root: ${STORAGE_OUTPUT_ROOT:../backend/workspace/outputs}

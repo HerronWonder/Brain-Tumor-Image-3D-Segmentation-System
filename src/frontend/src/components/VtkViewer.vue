@@ -44,13 +44,14 @@
     </div>
 
     <div ref="vtkContainer" class="vtk-canvas" v-show="!loading"></div>
+    <div v-if="renderError" class="render-error">{{ renderError }}</div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import axios from 'axios';
 import * as nifti from 'nifti-reader-js';
+import { apiClient } from '@/services/api';
 
 import '@kitware/vtk.js/Rendering/Profiles/All';
 import vtkGenericRenderWindow from '@kitware/vtk.js/Rendering/Misc/GenericRenderWindow';
@@ -75,6 +76,7 @@ const sliceMode = ref(2);
 const currentSlice = ref(0);
 const maxSlice = ref(100);
 const maskOpacity = ref(0.7);
+const renderError = ref('');
 
 let renderWindow, renderer, renderWindowContainer, interactor;
 let style2D, style3D;
@@ -126,11 +128,12 @@ const parseNiftiToVtk = (arrayBuffer) => {
 
 const loadData = async () => {
   try {
+    renderError.value = '';
     const t1ceFile = props.originalFiles.find(f => f.name.toLowerCase().includes('t1ce')) || props.originalFiles[0];
     const bgBuffer = await t1ceFile.arrayBuffer();
     bgVtkImg = parseNiftiToVtk(bgBuffer);
 
-    const maskRes = await axios.get(props.maskUrl, { responseType: 'arraybuffer' });
+    const maskRes = await apiClient.get(props.maskUrl, { responseType: 'arraybuffer' });
     maskVtkImg = parseNiftiToVtk(maskRes.data);
 
     setup2DPipeline();
@@ -154,8 +157,7 @@ const loadData = async () => {
     });
 
   } catch (err) {
-    console.error("VTK 渲染失败:", err);
-    alert("3D 数据渲染失败，请查看控制台报错详情。");
+    renderError.value = err?.message || '3D 数据渲染失败，请检查输入数据与网络连接。';
     loading.value = false;
   }
 };
@@ -410,6 +412,18 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   color: #38bdf8;
+}
+.render-error {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  background: rgba(127, 29, 29, 0.9);
+  color: #fee2e2;
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 10px 12px;
+  max-width: 70%;
+  font-size: 0.85rem;
 }
 .toolbar {
   /* 🌟 给工具栏一个固定的 Z 轴高度，防止被后面的画布挡住 */

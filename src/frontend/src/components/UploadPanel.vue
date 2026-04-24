@@ -15,6 +15,14 @@
       <li v-for="(file, index) in files" :key="index">📄 {{ file.name }}</li>
     </ul>
 
+    <div class="model-select" v-if="!inferenceDone">
+      <label for="modelType">模型选择</label>
+      <select id="modelType" v-model="selectedModel">
+        <option value="unet">3D U-Net (Baseline)</option>
+        <option value="mamba">Mamba3D (Hybrid)</option>
+      </select>
+    </div>
+
     <button 
       class="btn-submit" 
       v-if="!inferenceDone"
@@ -59,13 +67,14 @@
 
 <script setup>
 import { ref } from 'vue';
-import axios from 'axios';
+import { apiClient, toApiUrl } from '@/services/api';
 
 const files = ref([]);
 const isUploading = ref(false);
 const errorMsg = ref('');
 const inferenceDone = ref(false);
 const clinicalMetrics = ref(null);
+const selectedModel = ref('unet');
 
 const emit = defineEmits(['inferenceComplete', 'resetView']);
 
@@ -83,21 +92,18 @@ const submitForInference = async () => {
   
   const formData = new FormData();
   files.value.forEach(file => formData.append('files', file));
+  formData.append('model', selectedModel.value);
 
   try {
-    // 实验室服务器的IP
-    const SERVER_IP = "localhost"; 
-    
-    const response = await axios.post(`http://${SERVER_IP}:5000/api/predict`, formData, {
+    const response = await apiClient.post('/api/predict', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
-    
-    // 获取后端传来的临床体积指标
+
     clinicalMetrics.value = response.data.metrics;
     inferenceDone.value = true;
 
     emit('inferenceComplete', {
-      maskUrl: `http://${SERVER_IP}:5000${response.data.mask_url}`,
+      maskUrl: toApiUrl(response.data.mask_url),
       originalFiles: files.value 
     });
   } catch (error) {
@@ -132,6 +138,9 @@ const resetPanel = () => {
 .file-list { margin-top: 1rem; list-style: none; padding: 0; font-size: 0.85rem; color: #475569; }
 .drag-text { margin-top: 0.8rem; color: #94a3b8; font-size: 0.85rem; }
 .error-msg { margin-top: 1rem; color: #ef4444; font-size: 0.9rem; font-weight: bold; text-align: center;}
+.model-select { margin-top: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.model-select label { color: #334155; font-size: 0.9rem; font-weight: 600; }
+.model-select select { flex: 1; border: 1px solid #cbd5e1; background: #ffffff; border-radius: 6px; padding: 8px 10px; color: #0f172a; }
 
 /* 临床报告卡片样式 */
 .clinical-report h3 { color: #0f172a; margin-bottom: 1rem; font-size: 1.2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;}

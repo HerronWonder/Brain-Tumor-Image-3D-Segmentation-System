@@ -1,0 +1,13 @@
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/GatewayApplication.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/config/InferenceProperties.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/config/StorageProperties.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/config/WebClientConfig.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/controller/ApiExceptionHandler.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/controller/SegmentationController.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/model/InferRequest.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/model/InferResponse.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/model/PredictResponse.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/model/TaskContext.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/service/InferenceClient.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/service/ModalityResolver.java
+/data/ssd2/wangheran/FinalDesign/src/gateway-springboot/src/main/java/com/finaldesign/gateway/service/TaskStorageService.java

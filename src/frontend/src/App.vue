@@ -33,7 +33,6 @@ const renderData = ref(null);
 
 const handleRender = (data) => {
   renderData.value = data;
-  console.log("准备渲染 3D 掩码，下载地址：", data.maskUrl);
 };
 </script>
 
