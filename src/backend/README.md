@@ -34,3 +34,16 @@ Request body fields for /internal/infer:
 - No task orchestration logic.
 
 Those are handled by Spring Boot gateway.
+
+## How to use
+进入项目并执行一键启动
+cd /data/ssd2/wangheran/FinalDesign/src
+./start.sh
+
+启动后访问前端
+http://localhost:5173
+
+端口分工
+FastAPI 推理服务: 8000
+Spring Boot 网关: 8080
+前端 Vite: 5173

@@ -1,0 +1,74 @@
+# ------------------------------
+# OS / Editor
+# ------------------------------
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ------------------------------
+# Python
+# ------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.eggs/
+.python-version
+.env
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ------------------------------
+# Java / Maven
+# ------------------------------
+target/
+.mvn/timing.properties
+
+# ------------------------------
+# Node / Frontend
+# ------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.yarn/*
+dist/
+dist-ssr/
+coverage/
+*.local
+*.tsbuildinfo
+.eslintcache
+*.timestamp-*-*.mjs
+/cypress/videos/
+/cypress/screenshots/
+__screenshots__/
+
+# ------------------------------
+# Project runtime artifacts
+# ------------------------------
+src/backend/workspace/uploads/
+src/backend/workspace/outputs/
+src/outputs/
+src/scripts/nohup.out
+src/scripts/wandb/
+wandb/
+
+# Model / checkpoint files
+*.pt
+*.pth
+
+# Local toolchains / large binaries
+env/
+*.tar.gz
