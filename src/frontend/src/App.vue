@@ -1,18 +1,18 @@
 <template>
   <div class="app-container">
-    <!-- 左侧：控制台 (解耦) -->
+    <!-- Left panel: workflow controls -->
     <aside class="sidebar">
       <UploadPanel @inferenceComplete="handleRender" @resetView="renderData = null" />
     </aside>
 
-    <!-- 右侧：3D MPR 渲染画布 -->
+    <!-- Right panel: 3D MPR rendering canvas -->
     <main class="viewer-container">
       <div v-if="!renderData" class="placeholder">
-        <h3 style="font-size: 1.5rem; margin-bottom: 10px;">🧠 等待影像接入...</h3>
-        <p>请在左侧上传 T1, T1ce, T2, FLAIR 序列以启动 3D 渲染引擎</p>
+        <h3 style="font-size: 1.5rem; margin-bottom: 10px;">🧠 Waiting For Imaging Data...</h3>
+        <p>Upload T1, T1ce, T2, and FLAIR volumes in the left panel to start 3D rendering.</p>
       </div>
       
-      <!-- 这里完美嵌入了 VtkViewer 引擎！ -->
+      <!-- VtkViewer rendering engine mount point -->
       <div v-else class="vtk-mount-point">
         <VtkViewer 
           :maskUrl="renderData.maskUrl" 
@@ -28,7 +28,7 @@ import { ref } from 'vue';
 import UploadPanel from './components/UploadPanel.vue';
 import VtkViewer from './components/VtkViewer.vue';
 
-// 存储后端返回的渲染数据
+// Rendering payload returned by backend.
 const renderData = ref(null);
 
 const handleRender = (data) => {

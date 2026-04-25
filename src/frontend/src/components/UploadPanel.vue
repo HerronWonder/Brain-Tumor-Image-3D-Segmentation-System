@@ -1,12 +1,12 @@
 <template>
   <div class="upload-panel">
-    <h2>医疗影像 3D 分割系统</h2>
-    <p class="subtitle">多模态分析引擎</p>
+    <h2>Medical Imaging 3D Segmentation</h2>
+    <p class="subtitle">Multimodal Analysis Engine</p>
 
     <div class="upload-box" @drop.prevent="handleDrop" @dragover.prevent v-if="!inferenceDone">
       <input type="file" multiple @change="handleFileSelect" ref="fileInput" accept=".nii,.nii.gz" hidden />
       <button class="btn-primary" @click="$refs.fileInput.click()">
-        📂 请上传 4 个模态文件
+        📂 Upload 4 Modality Files
       </button>
       <p class="drag-text">T1, T1ce, T2, FLAIR</p>
     </div>
@@ -16,7 +16,7 @@
     </ul>
 
     <div class="model-select" v-if="!inferenceDone">
-      <label for="modelType">模型选择</label>
+      <label for="modelType">Model</label>
       <select id="modelType" v-model="selectedModel">
         <option value="unet">3D U-Net (Baseline)</option>
         <option value="mamba">Mamba3D (Hybrid)</option>
@@ -29,52 +29,52 @@
       :disabled="files.length !== 4 || isUploading" 
       @click="submitForInference"
     >
-      <span v-if="isUploading" class="spinner">⚙️ 任务执行中，请稍候...</span>
-      <span v-else>🚀 开始 3D 肿瘤分割</span>
+      <span v-if="isUploading" class="spinner">⚙️ Task Running, Please Wait...</span>
+      <span v-else>🚀 Start 3D Tumor Segmentation</span>
     </button>
 
     <div class="task-progress" v-if="isUploading">
       <div class="progress-header">
-        <span>任务 ID: {{ activeTaskId || '等待分配' }}</span>
+        <span>Task ID: {{ activeTaskId || 'Pending' }}</span>
         <span>{{ taskProgress }}%</span>
       </div>
       <div class="progress-track">
         <div class="progress-fill" :style="{ width: `${taskProgress}%` }"></div>
       </div>
-      <p class="progress-text">{{ taskStatusText || '正在初始化任务...' }}</p>
+      <p class="progress-text">{{ taskStatusText || 'Initializing task...' }}</p>
     </div>
 
     <div v-if="errorMsg" class="error-msg">❌ {{ errorMsg }}</div>
 
     <div class="clinical-report" v-if="inferenceDone && clinicalMetrics">
-      <h3>📊 自动化临床分析报告</h3>
+      <h3>📊 Automated Clinical Analysis Report</h3>
       <div class="metric-card">
         <div class="metric-item">
           <span class="dot necrotic"></span>
-          <span class="label">坏死与非增强核心 (NCR)</span>
+          <span class="label">Necrotic / Non-Enhancing Core (NCR)</span>
           <span class="value">{{ clinicalMetrics.necrotic_cm3 }} cm³</span>
         </div>
         <div class="metric-item">
           <span class="dot edema"></span>
-          <span class="label">瘤周水肿区 (ED)</span>
+          <span class="label">Peritumoral Edema (ED)</span>
           <span class="value">{{ clinicalMetrics.edema_cm3 }} cm³</span>
         </div>
         <div class="metric-item">
           <span class="dot enhancing"></span>
-          <span class="label">增强肿瘤区 (ET)</span>
+          <span class="label">Enhancing Tumor (ET)</span>
           <span class="value">{{ clinicalMetrics.enhancing_cm3 }} cm³</span>
         </div>
         <div class="divider"></div>
         <div class="metric-item total">
-          <span class="label">🔥 异常组织总体积 (WT)</span>
+          <span class="label">🔥 Total Abnormal Tissue Volume (WT)</span>
           <span class="value">{{ clinicalMetrics.total_cm3 }} cm³</span>
         </div>
       </div>
       <div class="export-actions" v-if="maskDownloadUrl || reportDownloadUrl">
-        <a v-if="maskDownloadUrl" :href="maskDownloadUrl" class="btn-export" download>⬇️ 导出 3D 掩码</a>
-        <a v-if="reportDownloadUrl" :href="reportDownloadUrl" class="btn-export secondary" download>⬇️ 导出结构化报告</a>
+        <a v-if="maskDownloadUrl" :href="maskDownloadUrl" class="btn-export" download>⬇️ Export 3D Mask</a>
+        <a v-if="reportDownloadUrl" :href="reportDownloadUrl" class="btn-export secondary" download>⬇️ Export Structured Report</a>
       </div>
-      <button class="btn-reset" @click="resetPanel">🔄 分析下一个病例</button>
+      <button class="btn-reset" @click="resetPanel">🔄 Analyze Next Case</button>
     </div>
 
   </div>
@@ -121,7 +121,7 @@ const completeTask = (statusData) => {
   inferenceDone.value = true;
   isUploading.value = false;
   taskProgress.value = 100;
-  taskStatusText.value = statusData.message || '任务完成';
+  taskStatusText.value = statusData.message || 'Task completed';
 
   maskDownloadUrl.value = statusData.mask_url ? toApiUrl(statusData.mask_url) : '';
   reportDownloadUrl.value = statusData.report_url ? toApiUrl(statusData.report_url) : '';
@@ -136,7 +136,7 @@ const completeTask = (statusData) => {
 
 const failTask = (statusData) => {
   isUploading.value = false;
-  errorMsg.value = statusData?.error || statusData?.message || '推理任务执行失败';
+  errorMsg.value = statusData?.error || statusData?.message || 'Inference task failed';
 };
 
 const pollTaskStatus = async (statusUrl) => {
@@ -165,20 +165,20 @@ const pollTaskStatus = async (statusUrl) => {
   } catch (error) {
     clearPollTimer();
     isUploading.value = false;
-    errorMsg.value = error.response?.data?.error || '任务状态查询失败，请稍后重试';
+    errorMsg.value = error.response?.data?.error || 'Failed to fetch task status. Please retry.';
   }
 };
 
 const submitForInference = async () => {
   if (files.value.length !== 4) {
-    errorMsg.value = "请严格上传 4 个对应模态的 NIfTI 文件！";
+    errorMsg.value = 'Please upload exactly 4 NIfTI files (T1, T1ce, T2, FLAIR).';
     return;
   }
   
   isUploading.value = true;
   errorMsg.value = '';
   taskProgress.value = 0;
-  taskStatusText.value = '任务已提交，等待网关分配...';
+  taskStatusText.value = 'Task submitted. Waiting for gateway scheduling...';
   clinicalMetrics.value = null;
   maskDownloadUrl.value = '';
   reportDownloadUrl.value = '';
@@ -194,14 +194,14 @@ const submitForInference = async () => {
     });
 
     activeTaskId.value = response.data.task_id || '';
-    taskStatusText.value = response.data.message || '任务已排队';
+    taskStatusText.value = response.data.message || 'Task queued';
     pollIntervalMs.value = Number(response.data.poll_interval_ms || 1000);
 
     const statusUrl = response.data.status_url || `/api/tasks/${activeTaskId.value}`;
     await pollTaskStatus(statusUrl);
   } catch (error) {
     clearPollTimer();
-    errorMsg.value = error.response?.data?.error || "服务器响应超时或网络错误";
+    errorMsg.value = error.response?.data?.error || 'Server timeout or network error.';
     isUploading.value = false;
   }
 };
@@ -250,7 +250,7 @@ onBeforeUnmount(() => {
 .model-select label { color: #334155; font-size: 0.9rem; font-weight: 600; }
 .model-select select { flex: 1; border: 1px solid #cbd5e1; background: #ffffff; border-radius: 6px; padding: 8px 10px; color: #0f172a; }
 
-/* 临床报告卡片样式 */
+/* Clinical report card */
 .clinical-report h3 { color: #0f172a; margin-bottom: 1rem; font-size: 1.2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;}
 .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; display: flex; flex-direction: column; gap: 12px; }
 .metric-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.95rem; color: #334155;}

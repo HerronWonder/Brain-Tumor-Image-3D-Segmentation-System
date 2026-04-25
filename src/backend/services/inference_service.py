@@ -13,6 +13,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 from data.pipelines import build_infer_transforms
+from models.mamba3d import build_mamba3d
 from models.unet3d import build_unet3d
 from services.modality import detect_modality
 
@@ -20,24 +21,30 @@ from services.modality import detect_modality
 class SegmentationInferenceService:
     def __init__(
         self,
-        weights_path: str,
+        model_weights: Dict[str, str],
         roi_size: Tuple[int, int, int] = (128, 128, 128),
         sw_batch_size: int = 4,
         default_device: str = "auto",
     ):
-        self.weights_path = weights_path
+        self.model_weights = model_weights
         self.roi_size = roi_size
         self.sw_batch_size = sw_batch_size
         self.default_device = default_device
 
-        self._model = None
-        self._model_device = None
+        self._model_cache: Dict[Tuple[str, str], torch.nn.Module] = {}
         self._lock = Lock()
         self._infer_transforms = build_infer_transforms(has_label=False)
 
-    def run(self, image_paths: List[str], output_dir: str, device: str = None):
+    def run(
+        self,
+        image_paths: List[str],
+        output_dir: str,
+        model_name: str = "unet",
+        device: str = None,
+    ):
         device_str = self._resolve_device(device)
-        model = self._get_or_load_model(device_str)
+        normalized_model_name = (model_name or "unet").strip().lower()
+        model = self._get_or_load_model(normalized_model_name, device_str)
 
         patient_dict = {"image": image_paths}
         test_data = self._infer_transforms(patient_dict)
@@ -55,13 +62,13 @@ class SegmentationInferenceService:
             pred_vol = torch.argmax(outputs, dim=1).cpu().numpy()[0]
 
         pred_vol[~bg_mask] = 0
-        metrics = self._compute_metrics(pred_vol)
+        affine_ref = self._pick_affine_reference(image_paths)
+        original_nii = nib.load(affine_ref)
+        voxel_volume_cm3 = self._resolve_voxel_volume_cm3(original_nii)
+        metrics = self._compute_metrics(pred_vol, voxel_volume_cm3)
 
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, "pred_mask.nii.gz")
-        affine_ref = self._pick_affine_reference(image_paths)
-
-        original_nii = nib.load(affine_ref)
         mask_nii = nib.Nifti1Image(pred_vol.astype(np.uint8), original_nii.affine)
         nib.save(mask_nii, output_path)
 
@@ -74,23 +81,52 @@ class SegmentationInferenceService:
             return self.default_device
         return "cuda" if torch.cuda.is_available() else "cpu"
 
-    def _get_or_load_model(self, device_str: str):
-        with self._lock:
-            if self._model is not None and self._model_device == device_str:
-                return self._model
+    def _get_or_load_model(self, model_name: str, device_str: str):
+        model_key = (model_name, device_str)
 
-            if not os.path.exists(self.weights_path):
-                raise FileNotFoundError(f"Model weights missing at: {self.weights_path}")
+        with self._lock:
+            if model_key in self._model_cache:
+                return self._model_cache[model_key]
+
+            weights_path = self._resolve_weights_path(model_name)
+            if not os.path.exists(weights_path):
+                raise FileNotFoundError(
+                    f"Model weights for '{model_name}' are missing at: {weights_path}"
+                )
 
             device = torch.device(device_str)
-            model = build_unet3d(in_channels=4, out_channels=5, device=device)
-            model.load_state_dict(torch.load(self.weights_path, map_location=device))
+            model = self._build_model(model_name, device)
+            state_dict = self._safe_load_state_dict(weights_path, device)
+            model.load_state_dict(state_dict)
             model.to(device)
             model.eval()
 
-            self._model = model
-            self._model_device = device_str
-            return self._model
+            self._model_cache[model_key] = model
+            return model
+
+    def _resolve_weights_path(self, model_name: str) -> str:
+        if model_name in self.model_weights:
+            return self.model_weights[model_name]
+        raise ValueError(f"Unsupported model '{model_name}'. Available: {', '.join(sorted(self.model_weights.keys()))}")
+
+    @staticmethod
+    def _build_model(model_name: str, device: torch.device):
+        if model_name == "unet":
+            return build_unet3d(in_channels=4, out_channels=5, device=device)
+        if model_name == "mamba":
+            return build_mamba3d(in_channels=4, out_channels=5, device=device)
+        raise ValueError(f"Unsupported model '{model_name}'. Use one of: unet, mamba")
+
+    @staticmethod
+    def _safe_load_state_dict(weights_path: str, device: torch.device):
+        try:
+            checkpoint = torch.load(weights_path, map_location=device, weights_only=True)
+        except TypeError:
+            checkpoint = torch.load(weights_path, map_location=device)
+
+        if isinstance(checkpoint, dict) and "state_dict" in checkpoint and isinstance(checkpoint["state_dict"], dict):
+            return checkpoint["state_dict"]
+        return checkpoint
 
     def _pick_affine_reference(self, image_paths: List[str]) -> str:
         for path in image_paths:
@@ -101,8 +137,13 @@ class SegmentationInferenceService:
         return image_paths[0]
 
     @staticmethod
-    def _compute_metrics(pred_vol: np.ndarray) -> Dict[str, float]:
-        voxel_vol_cm3 = 0.001
+    def _resolve_voxel_volume_cm3(reference_nii: nib.Nifti1Image) -> float:
+        spacing = reference_nii.header.get_zooms()[:3]
+        voxel_vol_mm3 = float(np.prod(spacing))
+        return voxel_vol_mm3 / 1000.0
+
+    @staticmethod
+    def _compute_metrics(pred_vol: np.ndarray, voxel_vol_cm3: float) -> Dict[str, float]:
 
         vol_necrotic = float(np.sum(pred_vol == 1)) * voxel_vol_cm3
         vol_edema = float(np.sum(pred_vol == 2)) * voxel_vol_cm3

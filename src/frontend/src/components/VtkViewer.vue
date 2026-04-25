@@ -1,44 +1,44 @@
 <template>
   <div class="vtk-viewer">
     <div v-if="loading" class="loading-overlay">
-      <h2>🔄 正在加载与解析 3D 医疗数据...</h2>
-      <p>这可能需要几秒钟时间，构建 3D 实体模型中...</p>
+      <h2>🔄 Loading And Parsing 3D Medical Data...</h2>
+      <p>This may take a few seconds while the 3D volume is being prepared...</p>
     </div>
 
     <div class="toolbar" v-if="!loading">
       
       <div class="mode-switch">
-        <button :class="{ active: viewMode === '2D' }" @click="switchMode('2D')">🎞️ 2D 正交切片</button>
-        <button :class="{ active: viewMode === '3D' }" @click="switchMode('3D')">🧊 3D 全息实体</button>
+        <button :class="{ active: viewMode === '2D' }" @click="switchMode('2D')">🎞️ 2D Orthogonal Slices</button>
+        <button :class="{ active: viewMode === '3D' }" @click="switchMode('3D')">🧊 3D Volume View</button>
       </div>
       <div class="divider-vertical"></div>
 
       <template v-if="viewMode === '2D'">
         <div class="control-group">
-          <label>🧭 视角: </label>
+          <label>🧭 View: </label>
           <select v-model="sliceMode" @change="updateSliceMode">
-            <option :value="2">Axial (横断面)</option>
-            <option :value="1">Coronal (冠状面)</option>
-            <option :value="0">Sagittal (矢状面)</option>
+            <option :value="2">Axial</option>
+            <option :value="1">Coronal</option>
+            <option :value="0">Sagittal</option>
           </select>
         </div>
         
         <div class="control-group slider-group">
-          <label>🔪 深度调节 ({{ currentSlice }}/{{ maxSlice }}):</label>
+          <label>🔪 Slice Depth ({{ currentSlice }}/{{ maxSlice }}):</label>
           <input type="range" min="0" :max="maxSlice" v-model.number="currentSlice" @input="updateSlice">
         </div>
       </template>
 
       <template v-if="viewMode === '3D'">
         <div class="control-group">
-          <span style="color: #10b981; font-weight: bold;">🖱️ 提示: 左键旋转，ctrl+左键旋转，滚轮平移</span>
+          <span style="color: #10b981; font-weight: bold;">🖱️ Tip: Left drag rotate, Ctrl+drag roll, wheel zoom/pan</span>
         </div>
       </template>
 
       <div class="divider-vertical"></div>
 
       <div class="control-group">
-        <label>👁️ 肿瘤透明度:</label>
+        <label>👁️ Tumor Opacity:</label>
         <input type="range" min="0" max="1" step="0.1" v-model.number="maskOpacity" @input="updateOpacity">
       </div>
     </div>
@@ -84,7 +84,7 @@ let bgMapper, bgSlice, maskMapper, maskSlice;
 let bgVolMapper, bgVolActor, maskVolMapper, maskVolActor;
 let bgVtkImg, maskVtkImg; 
 
-// 🌟 新增：存储 ResizeObserver 以便后续清理
+// Keep a ResizeObserver reference for cleanup on unmount.
 let resizeObserver = null;
 
 const initVtk = () => {
@@ -105,7 +105,7 @@ const parseNiftiToVtk = (arrayBuffer) => {
   if (nifti.isCompressed(arrayBuffer)) {
     arrayBuffer = nifti.decompress(arrayBuffer);
   }
-  if (!nifti.isNIFTI(arrayBuffer)) throw new Error("无效的 NIfTI 格式");
+  if (!nifti.isNIFTI(arrayBuffer)) throw new Error('Invalid NIfTI format');
   
   const header = nifti.readHeader(arrayBuffer);
   const image = nifti.readImage(header, arrayBuffer);
@@ -139,7 +139,7 @@ const loadData = async () => {
     setup2DPipeline();
     setup3DPipeline();
 
-    // 🌟 一次性添加所有 Actor 到渲染器，后续只通过可见性(Visibility)来控制显示
+    // Add all actors once and only toggle visibility afterwards.
     renderer.removeAllActors(); 
     renderer.addActor(bgSlice);
     renderer.addActor(maskSlice);
@@ -157,7 +157,7 @@ const loadData = async () => {
     });
 
   } catch (err) {
-    renderError.value = err?.message || '3D 数据渲染失败，请检查输入数据与网络连接。';
+    renderError.value = err?.message || '3D rendering failed. Please verify input data and network connectivity.';
     loading.value = false;
   }
 };
@@ -177,7 +177,7 @@ const setup2DPipeline = () => {
   maskSlice.setMapper(maskMapper);
 
   const ctf = vtkColorTransferFunction.newInstance();
-  ctf.addRGBPoint(0, 0.0, 0.0, 0.0); // 🌟 必须显式定义背景0为全透明/黑色
+  ctf.addRGBPoint(0, 0.0, 0.0, 0.0); // Explicitly map background to transparent black.
   ctf.addRGBPoint(1, 1.0, 0.2, 0.2); 
   ctf.addRGBPoint(2, 0.2, 1.0, 0.2); 
   ctf.addRGBPoint(4, 1.0, 0.8, 0.0); 
@@ -190,13 +190,13 @@ const setup2DPipeline = () => {
 
   maskSlice.getProperty().setRGBTransferFunction(ctf);
   maskSlice.getProperty().setPiecewiseFunction(pwf);
-  maskSlice.getProperty().setInterpolationTypeToNearest(); // 🌟 关闭插值防绿圈边缘
+  maskSlice.getProperty().setInterpolationTypeToNearest(); // Disable interpolation to avoid halo artifacts.
 
-  // 🌟 强制 2D 掩码使用自身的数据范围，修复全红问题
+  // Force 2D mask rendering to use its own value range.
   const maskDataRange = maskVtkImg.getPointData().getScalars().getRange();
   maskSlice.getProperty().setColorWindow(maskDataRange[1] - maskDataRange[0]);
   maskSlice.getProperty().setColorLevel((maskDataRange[1] + maskDataRange[0]) / 2.0);
-  // 🌟 让掩码失去“可拾取性”，鼠标的窗宽窗位调节就会无视它，直接穿透到底图上
+  // Make mask non-pickable so interactions target the base image layer.
   maskSlice.setPickable(false);
 };
 
@@ -224,7 +224,7 @@ const setup3DPipeline = () => {
   maskVolActor = vtkVolume.newInstance();
   maskVolActor.setMapper(maskVolMapper);
   
-  // 🌟 3D 使用完全独立的映射函数，彻底解决切回 2D 出现拉伸残影的问题
+  // Use dedicated transfer functions for 3D to avoid cross-mode artifacts.
   const maskVolCtf = vtkColorTransferFunction.newInstance();
   maskVolCtf.addRGBPoint(0, 0.0, 0.0, 0.0); 
   maskVolCtf.addRGBPoint(1, 1.0, 0.2, 0.2); 
@@ -246,7 +246,7 @@ const switchMode = (mode) => {
   viewMode.value = mode;
 
   if (mode === '2D') {
-    // 🌟 显示 2D 切片，隐藏 3D 实体
+    // Show 2D slice actors and hide 3D volumes.
     if(bgVolActor) bgVolActor.setVisibility(false);
     if(maskVolActor) maskVolActor.setVisibility(false);
     if(bgSlice) bgSlice.setVisibility(true);
@@ -256,7 +256,7 @@ const switchMode = (mode) => {
     renderer.getActiveCamera().setParallelProjection(true);
     updateSliceMode(); 
   } else {
-    // 🌟 隐藏 2D 切片，显示 3D 实体
+    // Show 3D volumes and hide 2D slice actors.
     if(bgSlice) bgSlice.setVisibility(false);
     if(maskSlice) maskSlice.setVisibility(false);
     if(bgVolActor) bgVolActor.setVisibility(true);
@@ -276,7 +276,7 @@ const updateSliceMode = () => {
   updateSliceBounds();
   currentSlice.value = Math.floor(maxSlice.value / 2);
   
-  updateSlice(); // 🌟 统一调用安全更新函数
+  updateSlice(); // Use the guarded slice update path.
   adjustCameraFor2D();
 };
 
@@ -296,7 +296,7 @@ const adjustCameraFor2D = () => {
   const maxDim = Math.max(bounds[1]-bounds[0], bounds[3]-bounds[2], bounds[5]-bounds[4]);
   camera.setParallelProjection(true);
   
-  // 💥 放宽相机的边缘视野，防止任何哪怕 1 像素的裁切
+  // Add a safe margin to prevent edge clipping.
   camera.setParallelScale(maxDim / 1.8); 
 
   const dist = maxDim * 2; 
@@ -326,7 +326,7 @@ const updateSliceBounds = () => {
 const updateSlice = () => {
   bgMapper.setSlice(currentSlice.value);
 
-  // 🌟 边缘越界保护：如果掩码厚度不对齐，超出部分直接隐藏，防止边缘拉长
+  // Hide mask when current slice is outside mask extent.
   const maskExtent = maskMapper.getInputData().getExtent();
   let maskMin = 0, maskMax = 0;
 
@@ -346,7 +346,7 @@ const updateSlice = () => {
 
 
 const updateOpacity = () => {
-  // 🌟 解耦后，调整透明度时需要同步更新 2D 和 3D 两个材质对象
+  // Keep 2D and 3D opacity mappings in sync.
   const pwf2D = vtkPiecewiseFunction.newInstance();
   pwf2D.addPoint(0, 0.0);
   pwf2D.addPoint(1, maskOpacity.value);
@@ -369,7 +369,7 @@ onMounted(() => {
   initVtk(); 
   loadData(); 
 
-  // 🌟 核心修复 2：监听浏览器窗口变化，实时通知 VTK 重绘，彻底拒绝白边和错位！
+  // Track container size changes and trigger VTK resize/render.
   resizeObserver = new ResizeObserver(() => {
     if (renderWindowContainer) {
       renderWindowContainer.resize();
@@ -396,7 +396,7 @@ onBeforeUnmount(() => {
 .vtk-viewer {
   width: 100%;
   height: 100%;
-  /* 🌟 使用相对定位，作为画布的锚点 */
+  /* Relative positioning anchors the canvas and overlays. */
   position: relative; 
   display: flex;
   flex-direction: column;
@@ -426,7 +426,7 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
 }
 .toolbar {
-  /* 🌟 给工具栏一个固定的 Z 轴高度，防止被后面的画布挡住 */
+  /* Keep toolbar above the canvas layer. */
   z-index: 10;
   display: flex;
   align-items: center;
@@ -486,14 +486,14 @@ select {
 }
 .vtk-canvas {
   position: absolute;
-  top: 60px; /* 大约是工具栏的高度 */
+  top: 60px; /* Approximately toolbar height */
   bottom: 0;
   left: 0;
   right: 0;
   width: 100%;
   height: calc(100% - 60px); 
 }
-/* 隐藏 VTK 自带的不美观焦点环 */
+/* Hide the default focus outline from vtk.js canvas. */
 .vtk-canvas:focus {
     outline: none;
 }
