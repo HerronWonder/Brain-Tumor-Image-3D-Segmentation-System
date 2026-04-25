@@ -1,13 +1,14 @@
 package com.finaldesign.gateway.controller;
 
-import com.finaldesign.gateway.model.InferResponse;
-import com.finaldesign.gateway.model.PredictResponse;
 import com.finaldesign.gateway.model.TaskContext;
-import com.finaldesign.gateway.service.InferenceClient;
+import com.finaldesign.gateway.model.TaskStatusResponse;
+import com.finaldesign.gateway.model.TaskSubmitResponse;
+import com.finaldesign.gateway.service.InferenceTaskService;
 import com.finaldesign.gateway.service.TaskStorageService;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
@@ -33,11 +34,11 @@ import java.util.UUID;
 public class SegmentationController {
 
     private final TaskStorageService taskStorageService;
-    private final InferenceClient inferenceClient;
+    private final InferenceTaskService inferenceTaskService;
 
-    public SegmentationController(TaskStorageService taskStorageService, InferenceClient inferenceClient) {
+    public SegmentationController(TaskStorageService taskStorageService, InferenceTaskService inferenceTaskService) {
         this.taskStorageService = taskStorageService;
-        this.inferenceClient = inferenceClient;
+        this.inferenceTaskService = inferenceTaskService;
     }
 
     @GetMapping("/health")
@@ -46,39 +47,28 @@ public class SegmentationController {
     }
 
     @PostMapping(value = "/predict", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<PredictResponse> predict(
+    public ResponseEntity<TaskSubmitResponse> predict(
             @RequestPart("files") List<MultipartFile> files,
             @RequestParam(name = "model", defaultValue = "unet") String model,
             @RequestHeader(name = "X-Request-ID", required = false) String incomingRequestId
     ) throws IOException {
         String normalizedModel = model.trim().toLowerCase(Locale.ROOT);
         String requestId = StringUtils.hasText(incomingRequestId)
-            ? incomingRequestId.trim()
-            : UUID.randomUUID().toString().replace("-", "");
+                ? incomingRequestId.trim()
+                : UUID.randomUUID().toString().replace("-", "");
         TaskContext task = taskStorageService.createTask(files);
 
-        InferResponse inferResponse = inferenceClient.infer(
-                task.imagePaths(),
-                task.outputDir().toString(),
-            normalizedModel,
-            requestId
-        );
+        TaskSubmitResponse response = inferenceTaskService.submit(task, normalizedModel, requestId);
 
-        String maskFilename = inferResponse.mask_filename() == null || inferResponse.mask_filename().isBlank()
-                ? "pred_mask.nii.gz"
-                : inferResponse.mask_filename();
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .header("X-Request-ID", requestId)
+                .body(response);
+    }
 
-        PredictResponse response = new PredictResponse(
-                "Inference successful",
-                task.taskId(),
-                "/api/download/" + task.taskId() + "/" + maskFilename,
-                inferResponse.model(),
-                inferResponse.metrics()
-        );
-
-        return ResponseEntity.ok()
-            .header("X-Request-ID", requestId)
-            .body(response);
+    @GetMapping("/tasks/{taskId}")
+    public ResponseEntity<TaskStatusResponse> getTaskStatus(@PathVariable String taskId) {
+        TaskStatusResponse response = inferenceTaskService.getStatus(taskId);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/download/{taskId}/{filename}")
@@ -94,7 +84,6 @@ public class SegmentationController {
         Resource resource = new FileSystemResource(filePath);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + resource.getFilename())
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -20,6 +21,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(IOException.class)
     public ResponseEntity<Map<String, String>> handleIo(IOException exception) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", exception.getMessage()));
+    }
+
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<Map<String, String>> handleNotFound(NoSuchElementException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", exception.getMessage()));
     }
 
     @ExceptionHandler(WebClientResponseException.class)

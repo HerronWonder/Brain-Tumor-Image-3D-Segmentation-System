@@ -29,13 +29,15 @@
 
 1. Frontend uploads 4 modality files to gateway /api/predict.
 2. Gateway validates modalities, stores files, allocates task output directory.
-3. Gateway calls FastAPI /internal/infer with ordered paths + output dir + model.
-4. Gateway and FastAPI propagate X-Request-ID for end-to-end traceability.
-5. Optional: Gateway sends X-Internal-Token when INFERENCE_INTERNAL_TOKEN is configured.
-6. FastAPI validates X-Internal-Token if INTERNAL_API_TOKEN is configured.
-7. FastAPI runs inference and writes pred_mask.nii.gz.
-8. Gateway returns task metadata and download URL.
-9. Frontend fetches mask from gateway /api/download.
+3. Gateway immediately returns task_id and status_url (non-blocking UI).
+4. Frontend enters polling state via /api/tasks/{taskId} and displays progress.
+5. Gateway calls FastAPI /internal/infer with ordered paths + output dir + model.
+6. Gateway and FastAPI propagate X-Request-ID for end-to-end traceability.
+7. Optional: Gateway sends X-Internal-Token when INFERENCE_INTERNAL_TOKEN is configured.
+8. FastAPI validates X-Internal-Token if INTERNAL_API_TOKEN is configured.
+9. FastAPI runs inference and writes pred_mask.nii.gz.
+10. Gateway stores structured report.json and exposes mask/report download URLs.
+11. Frontend fetches mask from gateway and enables mask/report export.
 
 ## Development Startup
 

@@ -28,11 +28,19 @@
 6. 内部服务鉴权: DONE
 - 支持 X-Internal-Token（可选启用）
 
+7. 异步任务编排与进度轮询: DONE
+- 网关 /api/predict 立即返回 task_id
+- 前端通过 /api/tasks/{taskId} 轮询进度并非阻塞展示
+
+8. 导出模块（掩码+结构化报告）: DONE
+- 提供 NIfTI 掩码下载
+- 提供 report.json 结构化指标报告下载
+
 ## B. 论文实验与交付目标
 
-1. 指标体系完整对齐论文（Dice/HD95/各分区等）: PARTIAL
-- 当前在线接口主要返回体积指标
-- 离线测试脚本已有 Dice 基础，但未统一到论文汇报口径
+1. 指标体系完整对齐论文（Dice/HD95/各分区等）: DONE (Offline Evaluation)
+- 离线评估脚本已统一输出 WT/TC/ET 的 Dice 与 HD95 结构化报告
+- 在线临床接口仍以体积指标为主，符合无标注推理场景
 
 2. 可复现实验配置（固定随机种子、配置快照、版本锁定）: PARTIAL
 - 有训练脚本与 wandb 记录

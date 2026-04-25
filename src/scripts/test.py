@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import json
 import torch
 import warnings
 import argparse
@@ -11,8 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.dataset import build_train_loader
 from monai.inferers import SlidingWindowInferer
-from monai.metrics import DiceMetric
-from monai.transforms import AsDiscrete
+from monai.metrics import compute_dice, compute_hausdorff_distance
 
 warnings.filterwarnings("ignore")
 
@@ -21,6 +21,12 @@ warnings.filterwarnings("ignore")
 # ==========================================
 DATA_DIRECTORY = "../../../dataset/All/"
 JSON_PATH = "../../../dataset/dataset.json"
+
+REGION_LABELS = {
+    "WT": [1, 2, 4],
+    "TC": [1, 4],
+    "ET": [4],
+}
 
 def get_model(model_name, device):
     """根据参数实例化不同的模型架构"""
@@ -43,34 +49,45 @@ def parse_args():
                         help="选择要测试的模型架构 (unet 或 mamba)")
     parser.add_argument("--weight_path", type=str, required=True, 
                         help="训练好的 .pth 权重文件路径")
+    parser.add_argument("--report_path", type=str, default="outputs/eval_report.json",
+                        help="评估报告输出路径")
     return parser.parse_args()
+
+
+def _region_mask(segmentation: np.ndarray, region_name: str) -> np.ndarray:
+    return np.isin(segmentation, REGION_LABELS[region_name]).astype(np.float32)
+
+
+def _optional_float(value: float):
+    if value is None:
+        return None
+    if not np.isfinite(value):
+        return None
+    return float(value)
+
+
+def _mean_or_none(values: list[float]):
+    if not values:
+        return None
+    arr = np.array(values, dtype=np.float32)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return None
+    return float(arr.mean())
 
 def main():
     args = parse_args()
 
-    print("\n" + "="*75)
-    print(f"[TESTING] 3D Segmentation Architecture : {args.model.upper()}")
-    print("="*75)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[SYSTEM] Computation Device          : {device}")
 
-    # ==================================
-    # 1. 加载测试集 (Test Split)
-    # ==================================
-    # ⚠️ 测试时必须跑全量数据，所以 mini_dataset_size=None
     test_loader, test_count = build_train_loader(
         data_dir=args.data_dir, 
         json_path=args.json_path, 
         split="test", 
-        batch_size=1,     # 测试时 batch_size 强制为 1
+        batch_size=1,
         mini_dataset_size=None
     )
-    print(f"[DATA]   Loaded Test Set             : {test_count} patients")
 
-    # ==================================
-    # 2. 构建模型并加载权重
-    # ==================================
     model = get_model(args.model, device)
     
     if os.path.exists(args.weight_path):
@@ -81,63 +98,111 @@ def main():
     
     model.eval()
 
-    # ==================================
-    # 3. 初始化推理器与评估指标
-    # ==================================
-    # 滑动窗口推理：roi_size 必须与你训练时 Crop 的空间大小一致 (128x128x128)
     inferer = SlidingWindowInferer(roi_size=(128, 128, 128), sw_batch_size=4, overlap=0.5)
-    
-    # BraTS 通常有 5 个类别 (包括背景 0)
-    # 计算 Dice 时，模型输出需要进行 Argmax 然后转 One-Hot，真实标签也需要转 One-Hot
-    post_pred = AsDiscrete(argmax=True, to_onehot=5)
-    post_label = AsDiscrete(to_onehot=5)
-    
-    # include_background=False 表示计算平均 Dice 时不把广袤的黑色背景算进去
-    dice_metric = DiceMetric(include_background=False, reduction="mean")
 
-    print("\n" + "-"*75)
-    print("Starting Testing Loop...")
-    print("-" * 75)
+    region_scores = {
+        region: {"dice": [], "hd95_mm": []}
+        for region in REGION_LABELS
+    }
 
     total_start_time = time.time()
 
-    # ==================================
-    # 4. 测试主循环
-    # ==================================
     with torch.no_grad():
-        for i, test_data in enumerate(test_loader):
+        for test_data in test_loader:
             test_inputs = test_data["image"].to(device)
             test_labels = test_data["label"].to(device)
 
-            # 1. 前向传播 (使用滑动窗口)
             test_outputs = inferer(test_inputs, model)
-            
-            # 2. 后处理：转换为 One-Hot 格式以计算 Dice
-            val_outputs = [post_pred(i) for i in test_outputs]
-            val_labels = [post_label(i) for i in test_labels]
-            
-            # 3. 压入当前 batch 的结果用于后续统计
-            dice_metric(y_pred=val_outputs, y=val_labels)
-            
-            # 打印当前样本的进度
-            print(f"[INFER]  Processed patient {i + 1:03d}/{test_count}...")
+            pred_labels = torch.argmax(test_outputs, dim=1).cpu().numpy()
+            gt_labels = test_labels.squeeze(1).cpu().numpy()
 
-    # ==================================
-    # 5. 汇总与输出报告
-    # ==================================
-    # 聚合并计算所有测试样本的平均 Dice 分数
-    mean_dice = dice_metric.aggregate().item()
-    
-    # 重置 metric 状态，释放内存
-    dice_metric.reset()
+            for batch_idx in range(pred_labels.shape[0]):
+                pred_np = pred_labels[batch_idx]
+                gt_np = gt_labels[batch_idx]
+
+                for region_name in REGION_LABELS:
+                    pred_region = _region_mask(pred_np, region_name)
+                    gt_region = _region_mask(gt_np, region_name)
+
+                    pred_tensor = torch.from_numpy(pred_region).unsqueeze(0).unsqueeze(0)
+                    gt_tensor = torch.from_numpy(gt_region).unsqueeze(0).unsqueeze(0)
+
+                    dice_value = compute_dice(pred_tensor, gt_tensor, include_background=True).item()
+                    hd95_value = compute_hausdorff_distance(
+                        pred_tensor,
+                        gt_tensor,
+                        include_background=True,
+                        percentile=95,
+                    ).item()
+
+                    dice_value = _optional_float(dice_value)
+                    hd95_value = _optional_float(hd95_value)
+
+                    if dice_value is not None:
+                        region_scores[region_name]["dice"].append(dice_value)
+                    if hd95_value is not None:
+                        region_scores[region_name]["hd95_mm"].append(hd95_value)
 
     total_duration = time.time() - total_start_time
-    print("-" * 75)
-    print(f"Testing Completed in {total_duration:.2f}s.")
-    print("\n" + "★"*75)
-    print(f"Final Test Metrics for [{args.model.upper()}]:")
-    print(f"-> Mean Dice Score (excluding background) : {mean_dice:.4f}")
-    print("★"*75 + "\n")
+
+    regions_report = {}
+    dice_means = []
+    hd95_means = []
+    for region_name, values in region_scores.items():
+        dice_mean = _mean_or_none(values["dice"])
+        hd95_mean = _mean_or_none(values["hd95_mm"])
+        if dice_mean is not None:
+            dice_means.append(dice_mean)
+        if hd95_mean is not None:
+            hd95_means.append(hd95_mean)
+
+        regions_report[region_name] = {
+            "dice": {
+                "mean": dice_mean,
+                "sample_count": len(values["dice"]),
+            },
+            "hd95_mm": {
+                "mean": hd95_mean,
+                "sample_count": len(values["hd95_mm"]),
+            },
+        }
+
+    report = {
+        "schema_version": "1.1",
+        "task": {
+            "mode": "offline_evaluation",
+            "model": args.model,
+            "weight_path": args.weight_path,
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
+        "dataset": {
+            "split": "test",
+            "data_dir": args.data_dir,
+            "json_path": args.json_path,
+            "case_count": int(test_count),
+        },
+        "evaluation_metrics": {
+            "regions": regions_report,
+            "summary": {
+                "mean_dice": _mean_or_none(dice_means),
+                "mean_hd95_mm": _mean_or_none(hd95_means),
+            },
+        },
+        "runtime": {
+            "device": str(device),
+            "duration_seconds": round(float(total_duration), 3),
+        },
+    }
+
+    report_path = args.report_path
+    report_dir = os.path.dirname(report_path)
+    if report_dir:
+        os.makedirs(report_dir, exist_ok=True)
+
+    with open(report_path, "w", encoding="utf-8") as fp:
+        json.dump(report, fp, ensure_ascii=False, indent=2)
+
+    print(f"Evaluation report written to: {report_path}")
 
 if __name__ == "__main__":
     main()

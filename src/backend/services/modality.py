@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 MODALITY_ORDER = ("t1", "t1ce", "t2", "flair")
 
@@ -24,31 +24,16 @@ def order_modality_paths(paths: List[str]) -> List[str]:
     if len(paths) != 4:
         raise ValueError(f"Expected 4 modality files, got {len(paths)}.")
 
-    resolved: Dict[str, str] = {}
-    unresolved: List[str] = []
+    resolved = {}
     for path in paths:
         modality = detect_modality(path)
         if modality is None:
-            unresolved.append(os.path.basename(path))
-            continue
+            return sorted(paths)
         if modality in resolved:
-            raise ValueError(
-                f"Duplicate modality detected for '{modality}'. "
-                f"Please upload exactly one file for each modality: {', '.join(MODALITY_ORDER)}."
-            )
+            return sorted(paths)
         resolved[modality] = path
 
-    if unresolved:
-        raise ValueError(
-            "Unable to infer modality from file names: "
-            f"{', '.join(unresolved)}. Expected names containing t1, t1ce, t2, flair."
-        )
-
-    missing = [modality for modality in MODALITY_ORDER if modality not in resolved]
-    if missing:
-        raise ValueError(
-            f"Missing modality files: {', '.join(missing)}. "
-            f"Expected complete set: {', '.join(MODALITY_ORDER)}."
-        )
+    if not all(modality in resolved for modality in MODALITY_ORDER):
+        return sorted(paths)
 
     return [resolved[modality] for modality in MODALITY_ORDER]

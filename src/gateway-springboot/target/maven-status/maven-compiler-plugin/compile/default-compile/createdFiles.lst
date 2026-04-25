@@ -7,7 +7,6 @@ com/finaldesign/gateway/service/ModalityResolver.class
 com/finaldesign/gateway/model/InferResponse.class
 com/finaldesign/gateway/GatewayApplication.class
 com/finaldesign/gateway/controller/ApiExceptionHandler.class
-com/finaldesign/gateway/model/PredictResponse.class
 com/finaldesign/gateway/model/InferRequest.class
 com/finaldesign/gateway/service/TaskStorageService.class
 com/finaldesign/gateway/config/WebClientConfig.class
