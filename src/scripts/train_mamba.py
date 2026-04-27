@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.dataset import build_train_loader
 from models.mamba3d import build_mamba3d
-from utils.losses import build_loss_function
+from utils.losses import CompoundBAEMLoss
 from torch.optim import Adam
 
 warnings.filterwarnings("ignore")
@@ -90,12 +90,12 @@ def main():
 
     if args.resume_weight is not None:
         if os.path.exists(args.resume_weight):
-            model.load_state_dict(torch.load(args.resume_weight, map_location=device))
+            model.load_state_dict(torch.load(args.resume_weight, map_location=device), strict=False)
             print(f"[MODEL]  Successfully loaded weights from: {args.resume_weight}")
         else:
             print(f"[WARNING] Weight file not found at {args.resume_weight}. Training from scratch.")
 
-    loss_function = build_loss_function()
+    loss_function = CompoundBAEMLoss(num_classes=5)
     optimizer = Adam(model.parameters(), args.lr)
     
     print(f"[CONFIG] Loss Function Strategy       : Dice + Cross Entropy")

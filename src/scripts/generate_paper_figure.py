@@ -151,10 +151,15 @@ def main():
     # 4. 推理 Mamba-U-Net
     print("[MODEL] Running Mamba-U-Net Inference...")
     mamba_model = build_mamba3d(in_channels=4, out_channels=5, device=device)
-    mamba_model.load_state_dict(torch.load(args.mamba_weights, map_location=device))
+    mamba_model.load_state_dict(torch.load(args.mamba_weights, map_location=device), strict=False)
     mamba_model.eval()
     with torch.no_grad():
-        mamba_outputs = sliding_window_inference(input_tensor, (128, 128, 128), 4, mamba_model)
+        mamba_outputs = sliding_window_inference(
+            input_tensor,
+            (128, 128, 128),
+            4,
+            lambda batch: mamba_model(batch)[0],
+        )
         mamba_vol = torch.argmax(mamba_outputs, dim=1).cpu().numpy()[0]
     mamba_slice = np.rot90(mamba_vol[best_z, :, :])
 

@@ -57,7 +57,7 @@ class SegmentationInferenceService:
                 inputs=input_tensor,
                 roi_size=self.roi_size,
                 sw_batch_size=self.sw_batch_size,
-                predictor=model,
+                predictor=lambda batch: self._extract_segmentation_logits(model(batch)),
             )
             pred_vol = torch.argmax(outputs, dim=1).cpu().numpy()[0]
 
@@ -97,7 +97,7 @@ class SegmentationInferenceService:
             device = torch.device(device_str)
             model = self._build_model(model_name, device)
             state_dict = self._safe_load_state_dict(weights_path, device)
-            model.load_state_dict(state_dict)
+            model.load_state_dict(state_dict, strict=False)
             model.to(device)
             model.eval()
 
@@ -127,6 +127,12 @@ class SegmentationInferenceService:
         if isinstance(checkpoint, dict) and "state_dict" in checkpoint and isinstance(checkpoint["state_dict"], dict):
             return checkpoint["state_dict"]
         return checkpoint
+
+    @staticmethod
+    def _extract_segmentation_logits(model_output: torch.Tensor):
+        if isinstance(model_output, (tuple, list)):
+            return model_output[0]
+        return model_output
 
     def _pick_affine_reference(self, image_paths: List[str]) -> str:
         for path in image_paths:

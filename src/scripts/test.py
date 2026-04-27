@@ -39,6 +39,12 @@ def get_model(model_name, device):
     else:
         raise ValueError(f"不支持的模型架构: {model_name}")
 
+
+def _extract_segmentation_logits(model_output):
+    if isinstance(model_output, (tuple, list)):
+        return model_output[0]
+    return model_output
+
 def parse_args():
     parser = argparse.ArgumentParser(description="3D Medical Image Inference & Testing")
     parser.add_argument("--data_dir", type=str, default=DATA_DIRECTORY)
@@ -91,7 +97,10 @@ def main():
     model = get_model(args.model, device)
     
     if os.path.exists(args.weight_path):
-        model.load_state_dict(torch.load(args.weight_path, map_location=device))
+        if args.model == "mamba":
+            model.load_state_dict(torch.load(args.weight_path, map_location=device), strict=False)
+        else:
+            model.load_state_dict(torch.load(args.weight_path, map_location=device))
         print(f"[MODEL]  Successfully loaded weights from: {args.weight_path}")
     else:
         raise FileNotFoundError(f"找不到权重文件: {args.weight_path}")
@@ -112,7 +121,7 @@ def main():
             test_inputs = test_data["image"].to(device)
             test_labels = test_data["label"].to(device)
 
-            test_outputs = inferer(test_inputs, model)
+            test_outputs = inferer(test_inputs, lambda batch: _extract_segmentation_logits(model(batch)))
             pred_labels = torch.argmax(test_outputs, dim=1).cpu().numpy()
             gt_labels = test_labels.squeeze(1).cpu().numpy()
 

@@ -118,8 +118,19 @@ def run_inference(model, patient_dict, device_str, save_path):
     input_tensor = test_data["image"].unsqueeze(0).to(device)
 
     # 模型推理
+    def seg_predictor(batch):
+        model_output = model(batch)
+        if isinstance(model_output, (tuple, list)):
+            return model_output[0]
+        return model_output
+
     with torch.no_grad():
-        outputs = sliding_window_inference(input_tensor, (128, 128, 128), 4, model)
+        outputs = sliding_window_inference(
+            input_tensor,
+            (128, 128, 128),
+            4,
+            seg_predictor,
+        )
         pred_vol = torch.argmax(outputs, dim=1).cpu().numpy()[0]
 
     # 解析数据用于渲染
@@ -168,7 +179,10 @@ def main():
         print(f"[ERROR] Model weights not found at: {weights_path}")
         return
 
-    model.load_state_dict(torch.load(weights_path, map_location=device_str))
+    if args.model_type == "mamba":
+        model.load_state_dict(torch.load(weights_path, map_location=device_str), strict=False)
+    else:
+        model.load_state_dict(torch.load(weights_path, map_location=device_str))
     model.eval()
 
     print("[TEST] Running inference and generating plots...")

@@ -2,6 +2,25 @@ import torch
 import torch.nn as nn
 from monai.networks.blocks import UnetResBlock
 
+
+class BoundaryAwareEnhancementModule(nn.Module):
+    """Boundary-Aware Enhancement Module (BAEM).
+
+    The module predicts a 1-channel edge attention map and applies residual
+    boundary enhancement: F_enhanced = F + F * E.
+    """
+
+    def __init__(self, in_channels: int):
+        super().__init__()
+        self.edge_head = nn.Conv3d(in_channels, 1, kernel_size=1, bias=True)
+        self.activation = nn.Sigmoid()
+
+    def forward(self, features: torch.Tensor):
+        edge_map = self.activation(self.edge_head(features))
+        enhanced_features = features + features * edge_map
+        return enhanced_features, edge_map
+
+
 class MambaLayer(nn.Module):
     """
     核心 Mamba 层：通过张量展平和非线性门控，
@@ -48,6 +67,8 @@ class Mamba3D(nn.Module):
             spatial_dims=3, in_channels=32, out_channels=32, 
             kernel_size=3, stride=1, norm_name="instance"
         )
+
+        self.baem = BoundaryAwareEnhancementModule(in_channels=32)
         
         # 分割预测头
         self.final_conv = nn.Conv3d(32, out_channels, kernel_size=1)
@@ -56,7 +77,10 @@ class Mamba3D(nn.Module):
         x = self.enc(x)
         x = self.mamba(x)
         x = self.dec(x)
-        return self.final_conv(x)
+
+        enhanced_features, edge_prediction = self.baem(x)
+        segmentation_output = self.final_conv(enhanced_features)
+        return segmentation_output, edge_prediction
 
 def build_mamba3d(in_channels=4, out_channels=5, device="cpu"):
     """
